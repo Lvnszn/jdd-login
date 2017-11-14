@@ -4,7 +4,6 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from sklearn.model_selection import StratifiedKFold
 import xgboost as xgb
-import lightgbm as lgb
 from sklearn.metrics import fbeta_score
 from sklearn.metrics import recall_score, precision_score
 from sklearn.cross_validation import train_test_split
@@ -61,6 +60,11 @@ train=pd.read_csv('../input/t_login.csv')
 test=pd.read_csv('../input/t_trade.csv')
 t_test = pd.read_csv('../input/t_trade_test.csv')
 t_train = pd.read_csv('../input/t_login_test.csv')
+
+train_test = train[(train.time < '2015-06-01')]
+test_test = test[(test.time > '2015-05-01') & (test.time < '2015-06-01')]
+
+print test_test.is_risk.value_counts()
 
 feature_to_use = ['rowkey', 'result','timelong','device','log_from','ip','city','id', 'scan_False', 'scan_True', 'type_1', 'type_2', 'type_3']
 train = pd.concat([train, pd.get_dummies(train['is_scan'], prefix='scan'), pd.get_dummies(train['type'], prefix='type'), pd.get_dummies(train['result'], prefix='result')], axis=1)
