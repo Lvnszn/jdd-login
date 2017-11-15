@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix
 
 def train_xgb(data, labels, test=None, test_label=None):
     param = {}
-    param['objective'] = 'binary:logistic'
+    param['objective'] = 'rank:pairwise'
     param['eta'] = 0.6
     param['max_depth'] = 5
     param['eval_metric'] = "auc"
@@ -35,7 +35,7 @@ def train_xgb(data, labels, test=None, test_label=None):
     xgtest = xgb.DMatrix(test_X, label=test_y)
 
     watchlist = [(xgtrain, 'train'), (xgtest, 'eval')]
-    bst = xgb.train(param, xgtrain, num_rounds, watchlist,  early_stopping_rounds=20)
+    bst = xgb.train(param, xgtrain, num_rounds, watchlist, maximize=True, feval=ff,  early_stopping_rounds=20)
     importance = bst.get_fscore()
     print(sorted(importance.items()))
 
@@ -50,10 +50,11 @@ def train_xgb(data, labels, test=None, test_label=None):
     test['is_risk'] = test.is_risk.fillna(0)
     test['is_risk'] = test.is_risk.astype(int)
     print test[['rowkey', 'is_risk']].drop_duplicates().is_risk.value_counts()
-    test[['rowkey', 'is_risk']].drop_duplicates().sort_values(by='rowkey').to_csv("xgb_pred.csv", index=False, header=False)
+    test[['rowkey', 'is_risk']].drop_duplicates().sort_values(by='rowkey').to_csv("preds.csv", index=False, header=False)
 
 def ff(preds, dtrain):
     label = dtrain.get_label()
+    preds = map(lambda x: 1 if x > 0.8 else 0, preds)
     return 'fbeta_score', fbeta_score(label, preds, beta=0.1)
 
 train=pd.read_csv('../input/t_login.csv')
