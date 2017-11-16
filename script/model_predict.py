@@ -11,7 +11,7 @@ from sklearn.metrics import confusion_matrix
 
 def train_xgb(data, labels, test=None, test_label=None):
     param = {}
-    param['objective'] = 'rank:pairwise'
+    param['objective'] = 'binary:logistic'
     param['eta'] = 0.6
     param['max_depth'] = 5
     param['eval_metric'] = "auc"
@@ -21,7 +21,7 @@ def train_xgb(data, labels, test=None, test_label=None):
     param['seed'] = 321
     param['silent'] = 1
     param['nthread'] = 8
-    num_rounds = 50000
+    num_rounds = 10
     print("start train...%d, %d" % (data.shape[0], len(labels)))
 
     member = test['rowkey']
@@ -50,7 +50,7 @@ def train_xgb(data, labels, test=None, test_label=None):
     test['is_risk'] = test.is_risk.fillna(0)
     test['is_risk'] = test.is_risk.astype(int)
     print test[['rowkey', 'is_risk']].drop_duplicates().is_risk.value_counts()
-    test[['rowkey', 'is_risk']].drop_duplicates().sort_values(by='rowkey').to_csv("preds.csv", index=False, header=False)
+    test[['rowkey', 'is_risk']].to_csv("preds.csv", index=False, header=False)
 
 def ff(preds, dtrain):
     label = dtrain.get_label()
