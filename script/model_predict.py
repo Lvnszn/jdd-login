@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix
 def train_xgb(data, labels, test=None, test_label=None):
     param = {}
     param['objective'] = 'binary:logistic'
-    param['eta'] = 0.6
+    param['eta'] = 0.5
     param['max_depth'] = 5
     param['eval_metric'] = "auc"
     param['min_child_weight'] = 3
@@ -21,7 +21,7 @@ def train_xgb(data, labels, test=None, test_label=None):
     param['seed'] = 321
     param['silent'] = 1
     param['nthread'] = 8
-    num_rounds = 10
+    num_rounds = 10000
     print("start train...%d, %d" % (data.shape[0], len(labels)))
 
     member = test['rowkey']
@@ -29,7 +29,7 @@ def train_xgb(data, labels, test=None, test_label=None):
     data = data.drop('rowkey', axis=1)
     train_X, test_X, train_y, test_y = train_test_split(data,
                                                         labels,
-                                                        test_size=0.1,
+                                                        test_size=0.2,
                                                         random_state=42)
     xgtrain = xgb.DMatrix(train_X, label=train_y)
     xgtest = xgb.DMatrix(test_X, label=test_y)
@@ -43,10 +43,10 @@ def train_xgb(data, labels, test=None, test_label=None):
     preds = bst.predict(xgtrain)
     test['is_risk'] = pd.DataFrame(preds)
 
-    test.loc[test['is_risk'] > 0.8, 'is_risk'] = 1
-    test.loc[test['is_risk'] <= 0.8, 'is_risk'] = 0
+    test.loc[test['is_risk'] > 0.6, 'is_risk'] = 1
+    test.loc[test['is_risk'] <= 0.6, 'is_risk'] = 0
     test = pd.concat([test, member],axis=1)
-    test = test_label.merge(test[test['is_risk'] > 0], how='left', on='rowkey')
+    test = test_label.merge(test[test['is_risk'] > 0][['rowkey', 'is_risk']].drop_duplicates(), how='left', on='rowkey')
     test['is_risk'] = test.is_risk.fillna(0)
     test['is_risk'] = test.is_risk.astype(int)
     print test[['rowkey', 'is_risk']].drop_duplicates().is_risk.value_counts()
@@ -67,12 +67,12 @@ test_test = test[(test.time > '2015-05-01') & (test.time < '2015-06-01')]
 
 print test_test.is_risk.value_counts()
 
-feature_to_use = ['rowkey', 'result','timelong','device','log_from','ip','city','id', 'scan_False', 'scan_True', 'type_1', 'type_2', 'type_3']
-train = pd.concat([train, pd.get_dummies(train['is_scan'], prefix='scan'), pd.get_dummies(train['type'], prefix='type'), pd.get_dummies(train['result'], prefix='result')], axis=1)
-_train = pd.concat([t_train, pd.get_dummies(t_train['is_scan'], prefix='scan'), pd.get_dummies(t_train['type'], prefix='type'), pd.get_dummies(t_train['result'], prefix='result')], axis=1)
+feature_to_use = ['rowkey', 'result','timelong','device','log_from','ip','city','id', 'is_scan', 'type']
+# train = pd.concat([train, pd.get_dummies(train['is_scan'], prefix='scan'), pd.get_dummies(train['type'], prefix='type'), pd.get_dummies(train['result'], prefix='result')], axis=1)
+# _train = pd.concat([t_train, pd.get_dummies(t_train['is_scan'], prefix='scan'), pd.get_dummies(t_train['type'], prefix='type'), pd.get_dummies(t_train['result'], prefix='result')], axis=1)
 
 all = train.merge(test, on='id')
-_all = _train.merge(t_test, on='id')
+_all = t_train.merge(t_test, on='id')
 
 t_all= pd.concat([all, _all])
 all['is_risk'] = all.is_risk.astype(int)
