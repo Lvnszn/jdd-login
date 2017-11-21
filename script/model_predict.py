@@ -14,7 +14,7 @@ e = 0.5
 def train_xgb(data, labels, test=None, test_label=None):
     param = {}
     param['objective'] = 'binary:logistic'
-    param['eta'] = 0.3
+    param['eta'] = 0.1
     param['max_depth'] = 5
     param['eval_metric'] = "auc"
     param['min_child_weight'] = 3
@@ -37,7 +37,7 @@ def train_xgb(data, labels, test=None, test_label=None):
     xgtest = xgb.DMatrix(test_X, label=test_y)
 
     watchlist = [(xgtrain, 'train'), (xgtest, 'eval')]
-    bst = xgb.train(param, xgtrain, num_rounds, watchlist, maximize=True,  early_stopping_rounds=40)
+    bst = xgb.train(param, xgtrain, num_rounds, watchlist, maximize=True, feval=ff, early_stopping_rounds=40)
     importance = bst.get_fscore()
     print(sorted(importance.items()))
     bst.dump_model("dump.raw.txt")
@@ -53,7 +53,7 @@ def train_xgb(data, labels, test=None, test_label=None):
     test['is_risk'] = test.is_risk.fillna(0)
     test['is_risk'] = test.is_risk.astype(int)
     print test[['rowkey', 'is_risk']].drop_duplicates().is_risk.value_counts()
-    test[['rowkey', 'is_risk']].to_csv("preds2.csv", index=False, header=False)
+    test[['rowkey', 'is_risk']].to_csv("preds.csv", index=False, header=False)
 
 def ff(preds, dtrain):
     label = dtrain.get_label()
@@ -65,7 +65,7 @@ test=pd.read_csv('../input/t_trade.csv')
 t_test = pd.read_csv('../input/t_trade_test.csv')
 t_train = pd.read_csv('../input/t_login_test.csv')
 
-train_test = train[(train.time < '2015-05-01') & (train.time >= '2015-02-01')]
+train_test = train[(train.time < '2015-06-01') & (train.time >= '2015-02-01')]
 test_test = test[(test.time >= '2015-05-01') & (test.time < '2015-06-01')]
 
 
