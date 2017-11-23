@@ -65,11 +65,11 @@ test=pd.read_csv('../input/t_trade.csv')
 t_test = pd.read_csv('../input/t_trade_test.csv')
 t_train = pd.read_csv('../input/t_login_test.csv')
 
-train_test = train[(train.time < '2015-06-01') & (train.time >= '2015-02-01')]
+train_test = train[(train.time < '2015-05-01') & (train.time >= '2015-02-01')]
 test_test = test[(test.time >= '2015-05-01') & (test.time < '2015-06-01')]
 
 
-all_train = pd.concat([train_test, t_train])
+all_train = pd.concat([train_test, train[(train.time < '2015-06-01') & (train.time >= '2015-05-01')]])
 
 devices= train_test[['id','device']].drop_duplicates().groupby(['id'])['device'].count().reset_index()
 all_devices = all_train[['id','device']].drop_duplicates().groupby(['id'])['device'].count().reset_index()
@@ -106,7 +106,14 @@ all_log_froms.columns = ['id', 'log_froms']
 test_test = test_test.merge(log_froms, on='id')
 all_t_test = all_t_test.merge(all_log_froms, on='id')
 
-feature_to_use = ['rowkey', 'divs', 'citys', 'ips', 'log_ids','id', 'log_froms']
+types = train_test[['id','type']].drop_duplicates().groupby(['id'])['type'].count().reset_index()
+all_types = all_train[['id','type']].drop_duplicates().groupby(['id'])['type'].count().reset_index()
+types.columns = ['id', 'types']
+all_types.columns = ['id', 'types']
+test_test = test_test.merge(types, on='id')
+all_t_test = all_t_test.merge(all_types, on='id')
+
+feature_to_use = ['rowkey', 'divs', 'citys', 'ips', 'log_ids', 'log_froms', 'types']
 # feature_to_use = ['rowkey', 'result','timelong','device','log_from','ip','city','id', 'is_scan', 'type']
 # train = pd.concat([train, pd.get_dummies(train['is_scan'], prefix='scan'), pd.get_dummies(train['type'], prefix='type'), pd.get_dummies(train['result'], prefix='result')], axis=1)
 # _train = pd.concat([t_train, pd.get_dummies(t_train['is_scan'], prefix='scan'), pd.get_dummies(t_train['type'], prefix='type'), pd.get_dummies(t_train['result'], prefix='result')], axis=1)
@@ -114,8 +121,10 @@ feature_to_use = ['rowkey', 'divs', 'citys', 'ips', 'log_ids','id', 'log_froms']
 # all = train_test.merge(test_test, on='id')
 # _all = all_train.merge(t_test, on='id')
 
-all = test_test
-_all = all_t_test
+
+
+all = train_test.merge(test_test, how='inner', on='id')
+_all = all_train.merge(all_t_test, how='inner', on='id')
 
 all['is_risk'] = all.is_risk.astype(int)
 train_xgb(all[feature_to_use], all['is_risk'], _all[feature_to_use], test_label=t_test)

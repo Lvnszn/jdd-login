@@ -86,7 +86,7 @@ def tradeDataInit(tradeData, loginData):
     # 构建一个小时的
     tradeData['hours'] = tradeData['time'].str.extract('\\s(\\d\\d):')
     tradeData['hours'] = tradeData['hours'].astype('int')
-    tradeData = pd.merge(tradeData, loginData[['log_id', 'time']], left_on='login_id', right_on='log_id', how='inner')
+    tradeData = pd.merge(tradeData, loginData[['log_id', 'time']], left_on='log_id', right_on='log_id', how='inner')
     del tradeData['log_id']
     #     tradeData['hours']=
     #     print(OneHotEncoder(sparse = False).fit_transform( tradeData[['hours']]))
