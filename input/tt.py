@@ -98,18 +98,18 @@ def tradeDataInit(tradeData, loginData):
     # 交易时间和登录时间之间的差值
     tradeData['st'] = (tradeData['tx'] - tradeData['ty']).dt.seconds
     # 每次交易时间的差
-    tradeData['trade_time_sub'] = tradeData.sort_values(by='tx').groupby('id')['tx'].diff()
-    tradeData['trade_time_sub_day'] = tradeData['trade_time_sub'].dt.days
-    tradeData = getMaxByColumnName(tradeData, tradeData, 'trade_time_sub_day')
-    tradeData = getMeanByColumnName(tradeData, tradeData, 'trade_time_sub_day')
-    tradeData = getMinByColumnName(tradeData, tradeData, 'trade_time_sub_day')
-    tradeData = getStdByColumnName(tradeData, tradeData, 'trade_time_sub_day')
-    tradeData = getVarByColumnName(tradeData, tradeData, 'trade_time_sub_day')
+    # tradeData['trade_time_sub'] = tradeData.sort_values(by='tx').groupby('id')['tx'].diff()
+    # tradeData['trade_time_sub_day'] = tradeData['trade_time_sub'].dt.days
+    # tradeData = getMaxByColumnName(tradeData, tradeData, 'trade_time_sub_day')
+    # tradeData = getMeanByColumnName(tradeData, tradeData, 'trade_time_sub_day')
+    # tradeData = getMinByColumnName(tradeData, tradeData, 'trade_time_sub_day')
+    # tradeData = getStdByColumnName(tradeData, tradeData, 'trade_time_sub_day')
+    # tradeData = getVarByColumnName(tradeData, tradeData, 'trade_time_sub_day')
     # 使用的比例
     tradeData = getTradeLoginColumScale(tradeData, loginData, 'device')
     tradeData = getTradeLoginColumScale(tradeData, loginData, 'city')
 
-    del tradeData['tx'], tradeData['ty'], tradeData['time_y'], tradeData['login_id'], tradeData['trade_time_sub']
+    del tradeData['tx'], tradeData['ty'], tradeData['time_y'], tradeData['login_id']
     tradeData.rename(columns={'time_x': 'time'}, inplace=True)
     return tradeData
 
@@ -154,7 +154,7 @@ def getPipe():
     import xgboost as xgb
     from xgboost.sklearn import XGBClassifier
     #xgb的配置
-    xgbFier = XGBClassifier(
+    xgbFier = xgb.XGBClassifier(
              learning_rate =0.3,
              n_estimators=1000,
              max_depth=5,
@@ -163,30 +163,19 @@ def getPipe():
              subsample=0.8,
              colsample_bytree=0.8,
              objective= 'binary:logistic',
-             nthread=2,
+             nthread=3,
              scale_pos_weight=1,
              seed=27,
              silent=0
     )
     # 用StandardScaler和PCA作为转换器，LogisticRegression作为评估器
     estimators = [
-#         ('scl', StandardScaler()),
-#                   ('pca', PCA(n_components=2)),
-#                    ('rf', RandomForestClassifier(random_state=1,
-#                                                  max_depth= 50,
-#                                                  min_samples_leaf= 3,
-#                                                  min_samples_split= 10,
-#                                                  n_estimators= 20,
-#                                                 )),
-#                   ('dtc',DecisionTreeClassifier(criterion='entropy')),
-                                    ('xgb',xgbFier),
-#                   ('lr', LogisticRegression())
+
+                                    ('xgb',xgbFier)
                  ]
-    # estimators = [ ('clf', RandomForestClassifier(random_state=1))]
-    # Pipeline类接收一个包含元组的列表作为参数，每个元组的第一个值为任意的字符串标识符，
-    #比如：我们可以通过pipe_lr.named_steps['pca']来访问PCA组件;第二个值为scikit-learn的转换器或评估器
+
     pipe_lr = Pipeline(estimators)
-    return pipe_lr
+    return xgbFier
 
 
 # 得到训练用的测试集元组（x，y）
@@ -226,7 +215,7 @@ def transferData(loginData, tradeData):
     lData = getMinByColumnName(loginData, lData, 'timelong')
     lData = getMaxByColumnName(loginData, lData, 'timelong')
     lData = getMeanByColumnName(loginData, lData, 'timelong')
-    lData = getVarByColumnName(loginData, lData, 'timelong')
+    # lData = getVarByColumnName(loginData, lData, 'timelong')
     lData = getStdByColumnName(loginData, lData, 'timelong')
     # #     #device的个数
     lData = getCountsByColumnName(loginData, lData, 'device')
@@ -296,15 +285,18 @@ if __name__ == '__main__':
 
 
     #网格搜索
-    grid_search = GridSearchCV(pipe_lr, parameters, n_jobs=-1, verbose=1, scoring=rocJdScore)
-    grid_search.fit(X_train, y_train)
+    # grid_search = GridSearchCV(pipe_lr, parameters, n_jobs=-1, verbose=1, scoring=rocJdScore)
+    pipe_lr.fit(X_train, y_train)
 
     #获取最优参数
-    print('最佳效果：%0.3f' % grid_search.best_score_)
-    print('最优参数：')
-    best_parameters = grid_search.best_estimator_.get_params()
-    for param_name in sorted(parameters.keys()):
-        print('\t%s= %r' % (param_name, best_parameters[param_name]))
+    # print('最佳效果：%0.3f' % grid_search.best_score_)
+    # print('最优参数：')
+    # best_parameters = grid_search.best_estimator_.get_params()
+    # for param_name in sorted(parameters.keys()):
+    #     print('\t%s= %r' % (param_name, best_parameters[param_name]))
+
+    # importance = pipe_lr.get_fscore()
+    # print(sorted(importance.items()))
 
     # #预测以及分类器参数报告
     # predictions = grid_search.predict(X_test)
@@ -315,7 +307,7 @@ if __name__ == '__main__':
     preData=transferData(loginTestData,tradeTestData)
     x_pred=preData.iloc[:,2:].values
     y_pred=pipe.predict(x_pred)
-    np.sum(y_pred)
+    print np.sum(y_pred)
 
     p=pd.DataFrame(y_pred)
     subData=pd.DataFrame(preData['rowkey'])
