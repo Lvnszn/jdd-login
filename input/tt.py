@@ -4,8 +4,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 loginData=pd.read_csv("t_login.csv",dtype={'log_id':str,'id':str})
 loginTestData=pd.read_csv("t_login_test.csv",dtype={'log_id':str,'id':str})
-tradeData=pd.read_csv("t_trade.csv",dtype={'id':str,'login_id':str})
-tradeTestData=pd.read_csv("t_trade_test.csv",dtype={'id':str,'login_id':str})
+tradeData=pd.read_csv("trade_2_login.csv",dtype={'id':str,'login_id':str})
+tradeTestData=pd.read_csv("t_trade_test_2_login.csv",dtype={'id':str,'login_id':str})
 loginTestData=loginTestData.append(loginData)
 def getUserIDFromDataFrame(dataFrame):
     return pd.DataFrame({'id':dataFrame['id'].unique()})
@@ -83,10 +83,11 @@ from sklearn.preprocessing import OneHotEncoder
 # 处理交易数据
 def tradeDataInit(tradeData, loginData):
     tradeData = tradeData.copy()
+    print tradeData.columns
     # 构建一个小时的
     tradeData['hours'] = tradeData['time'].str.extract('\\s(\\d\\d):')
     tradeData['hours'] = tradeData['hours'].astype('int')
-    tradeData = pd.merge(tradeData, loginData[['log_id', 'time']], left_on='log_id', right_on='log_id', how='inner')
+    tradeData = pd.merge(tradeData, loginData[['log_id', 'time']], left_on='login_id', right_on='log_id', how='inner')
     del tradeData['log_id']
     #     tradeData['hours']=
     #     print(OneHotEncoder(sparse = False).fit_transform( tradeData[['hours']]))
@@ -97,7 +98,7 @@ def tradeDataInit(tradeData, loginData):
     # 交易时间和登录时间之间的差值
     tradeData['st'] = (tradeData['tx'] - tradeData['ty']).dt.seconds
     # 每次交易时间的差
-    tradeData['trade_time_sub'] = tradeData.sort_values(by='tx').groupby('id').diff()['tx']
+    tradeData['trade_time_sub'] = tradeData.sort_values(by='tx').groupby('id')['tx'].diff()
     tradeData['trade_time_sub_day'] = tradeData['trade_time_sub'].dt.days
     tradeData = getMaxByColumnName(tradeData, tradeData, 'trade_time_sub_day')
     tradeData = getMeanByColumnName(tradeData, tradeData, 'trade_time_sub_day')
@@ -262,66 +263,66 @@ def transferData(loginData, tradeData):
     allData = allData.ix[:, cols]
     print(allData.head(2))
     return allData
+if __name__ == '__main__':
+    #k-fold交叉验证
+    from sklearn.cross_validation import cross_val_score
+    pipe_lr=getPipe()
+    X_train,y_train=getTrainData(isUndersample=False)
+    #记录程序运行时间
+    import time
+    start_time = time.time()
+    scores = cross_val_score(estimator=pipe_lr, X=X_train, y=y_train, cv=5, n_jobs=2,scoring=rocJdScore)
+    print(scores)
+    #整体预测
+    X_train,y_train=getTrainData(isUndersample=False)
+    pipe_lr
+    #输出运行时长
+    cost_time = time.time()-start_time
+    print("交叉验证 success!",'\n',"cost time:",cost_time,"(s)")
 
-#k-fold交叉验证
-from sklearn.cross_validation import cross_val_score
-pipe_lr=getPipe()
-X_train,y_train=getTrainData(isUndersample=False)
-#记录程序运行时间
-import time
-start_time = time.time()
-scores = cross_val_score(estimator=pipe_lr, X=X_train, y=y_train, cv=10, n_jobs=2,scoring=rocJdScore)
-print(scores)
-#整体预测
-X_train,y_train=getTrainData(isUndersample=False)
-pipe_lr
-#输出运行时长
-cost_time = time.time()-start_time
-print("交叉验证 success!",'\n',"cost time:",cost_time,"(s)")
+    from sklearn.grid_search import GridSearchCV
+    parameters = {
+    #     'rf__n_estimators': (5, 10, 20, 50),
+    #     'rf__max_depth': (50, 150, 250),
+    #     'rf__min_samples_split': [10, 2, 3],
+    #     'rf__min_samples_leaf': (1, 2, 3),
+        #xgb的参数
+        'xgb__max_depth':(5),
+        'xgb__learning_rate':(0.2)
 
-from sklearn.grid_search import GridSearchCV
-parameters = {
-#     'rf__n_estimators': (5, 10, 20, 50),
-#     'rf__max_depth': (50, 150, 250),
-#     'rf__min_samples_split': [10, 2, 3],
-#     'rf__min_samples_leaf': (1, 2, 3),
-    #xgb的参数
-    'xgb__max_depth':(4,6),
-    'xgb__learning_rate':(0.3,0.5)
-
-}
-pipe_lr=getPipe()
-X_train,y_train=getTrainData()
+    }
+    pipe_lr=getPipe()
+    X_train,y_train=getTrainData()
 
 
-#网格搜索
-grid_search = GridSearchCV(pipe_lr, parameters, n_jobs=-1, verbose=1, scoring=rocJdScore)
-grid_search.fit(X_train, y_train)
+    #网格搜索
+    grid_search = GridSearchCV(pipe_lr, parameters, n_jobs=-1, verbose=1, scoring=rocJdScore)
+    grid_search.fit(X_train, y_train)
 
-#获取最优参数
-print('最佳效果：%0.3f' % grid_search.best_score_)
-print('最优参数：')
-best_parameters = grid_search.best_estimator_.get_params()
-for param_name in sorted(parameters.keys()):
-    print('\t%s= %r' % (param_name, best_parameters[param_name]))
+    #获取最优参数
+    print('最佳效果：%0.3f' % grid_search.best_score_)
+    print('最优参数：')
+    best_parameters = grid_search.best_estimator_.get_params()
+    for param_name in sorted(parameters.keys()):
+        print('\t%s= %r' % (param_name, best_parameters[param_name]))
 
-# #预测以及分类器参数报告
-# predictions = grid_search.predict(X_test)
-# print(classification_report(y_test, predictions))
+    # #预测以及分类器参数报告
+    # predictions = grid_search.predict(X_test)
+    # print(classification_report(y_test, predictions))
 
-pipe=getPipe()
-pipe=jdPipeFited(pipe)
-preData=transferData(loginTestData,tradeTestData)
-x_pred=preData.iloc[:,2:].values
-y_pred=pipe.predict(x_pred)
-np.sum(y_pred)
+    pipe=getPipe()
+    pipe=jdPipeFited(pipe)
+    preData=transferData(loginTestData,tradeTestData)
+    x_pred=preData.iloc[:,2:].values
+    y_pred=pipe.predict(x_pred)
+    np.sum(y_pred)
 
-p=pd.DataFrame(y_pred)
-subData=pd.DataFrame(preData['rowkey'])
-subData['is_risk']=p
-#之前用很多inner join，很多数据没有，都默认处理为没有风险
-subData=pd.merge(tradeTestData[['rowkey']],subData,on='rowkey',how='left')
-subData=subData.fillna(0)
-subData['is_risk']=subData['is_risk'].astype('int')
+    p=pd.DataFrame(y_pred)
+    subData=pd.DataFrame(preData['rowkey'])
+    subData['is_risk']=p
+    #之前用很多inner join，很多数据没有，都默认处理为没有风险
+    subData=pd.merge(tradeTestData[['rowkey']],subData,on='rowkey',how='left')
+    subData=subData.fillna(0)
+    subData['is_risk']=subData['is_risk'].astype('int')
 
-subData.to_csv('./sub.csv',header=False,index=False)
+    subData.to_csv('./sub.csv',header=False,index=False)

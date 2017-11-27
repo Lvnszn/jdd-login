@@ -123,8 +123,8 @@ feature_to_use = ['rowkey', 'divs', 'citys', 'ips', 'log_ids', 'log_froms', 'typ
 
 
 
-all = train_test.merge(test_test, how='inner', on='id')
-_all = all_train.merge(all_t_test, how='inner', on='id')
+all = test_test
+_all = all_t_test
 
 all['is_risk'] = all.is_risk.astype(int)
 train_xgb(all[feature_to_use], all['is_risk'], _all[feature_to_use], test_label=t_test)
