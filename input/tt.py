@@ -1,6 +1,7 @@
 # coding:utf-8
 import pandas as pd
 import numpy as np
+import xgboost as xgb
 import matplotlib.pyplot as plt
 loginData=pd.read_csv("t_login.csv",dtype={'log_id':str,'id':str})
 loginTestData=pd.read_csv("t_login_test.csv",dtype={'log_id':str,'id':str})
@@ -143,41 +144,6 @@ def rocJdScore(*args):
     from sklearn import metrics
     return metrics.make_scorer(fbeta_score,beta=0.1, greater_is_better=True)(*args)
 
-def getPipe():
-    # 下面，我要用逻辑回归拟合模型，并用标准化和PCA（30维->2维）对数据预处理，用Pipeline类把这些过程链接在一起
-    from sklearn.preprocessing import StandardScaler
-    from sklearn.decomposition import PCA
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.tree import DecisionTreeClassifier
-    from sklearn.pipeline import Pipeline
-    import xgboost as xgb
-    from xgboost.sklearn import XGBClassifier
-    #xgb的配置
-    xgbFier = xgb.XGBClassifier(
-             learning_rate =0.3,
-             n_estimators=1000,
-             max_depth=5,
-             min_child_weight=1,
-             gamma=0,
-             subsample=0.8,
-             colsample_bytree=0.8,
-             objective= 'binary:logistic',
-             nthread=3,
-             scale_pos_weight=1,
-             seed=27,
-             silent=0
-    )
-    # 用StandardScaler和PCA作为转换器，LogisticRegression作为评估器
-    estimators = [
-
-                                    ('xgb',xgbFier)
-                 ]
-
-    pipe_lr = Pipeline(estimators)
-    return xgbFier
-
-
 # 得到训练用的测试集元组（x，y）
 def getTrainData(isUndersample=False):
     allData = transferData(loginData, tradeData)
@@ -198,15 +164,44 @@ def getTrainData(isUndersample=False):
 
 
 # 生成学习算法
-def jdPipeFited(pipe_lr):
+def jdPipeFited():
     x, y = getTrainData(isUndersample=False)
     from sklearn.cross_validation import train_test_split
     # 拆分成训练集(80%)和测试集(20%)
-    #     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.20, random_state=1)
+    train_X, test_X, train_y, test_y = train_test_split(x,
+                                                        y,
+                                                        test_size=0.2,
+                                                        random_state=42)
 
-    pipe_lr.fit(x, y)
-    return pipe_lr
+    param = {}
+    param['objective'] = 'binary:logistic'
+    param['eta'] = 0.1
+    param['max_depth'] = 5
+    param['eval_metric'] = "auc"
+    param['min_child_weight'] = 3
+    param['subsample'] = 0.8
+    param['colsample_bytree'] = 0.8
+    param['seed'] = 321
+    param['silent'] = 1
+    param['nthread'] = 3
+    num_rounds = 10000
 
+    xgtrain = xgb.DMatrix(train_X, label=train_y)
+    xgtest = xgb.DMatrix(test_X, label=test_y)
+
+    watchlist = [(xgtrain, 'train'), (xgtest, 'eval')]
+    xgbFier = xgb.train(param, xgtrain, num_rounds, watchlist, early_stopping_rounds=40)
+
+    importance = xgbFier.get_fscore()
+    print(sorted(importance.items()))
+    xgbFier.dump_model("dump.raw.txt")
+
+    return xgbFier
+
+def ff(preds, dtrain):
+    label = dtrain.get_label()
+    preds = map(lambda x: 1 if x > 0.8 else 0, preds)
+    return 'fbeta_score', fbeta_score(label, preds, beta=0.1)
 
 def transferData(loginData, tradeData):
     lData = getUserIDFromDataFrame(loginData)
@@ -252,64 +247,36 @@ def transferData(loginData, tradeData):
     allData = allData.ix[:, cols]
     print(allData.head(2))
     return allData
+
 if __name__ == '__main__':
     #k-fold交叉验证
     from sklearn.cross_validation import cross_val_score
-    pipe_lr=getPipe()
-    X_train,y_train=getTrainData(isUndersample=False)
+    # pipe_lr=getPipe()
+    # X_train,y_train=getTrainData(isUndersample=False)
     #记录程序运行时间
     import time
     start_time = time.time()
-    scores = cross_val_score(estimator=pipe_lr, X=X_train, y=y_train, cv=5, n_jobs=2,scoring=rocJdScore)
-    print(scores)
+    # scores = cross_val_score(estimator=pipe_lr, X=X_train, y=y_train, cv=5, n_jobs=2,scoring=rocJdScore)
+    # print(scores)
     #整体预测
     X_train,y_train=getTrainData(isUndersample=False)
-    pipe_lr
+
     #输出运行时长
     cost_time = time.time()-start_time
     print("交叉验证 success!",'\n',"cost time:",cost_time,"(s)")
 
-    from sklearn.grid_search import GridSearchCV
-    parameters = {
-    #     'rf__n_estimators': (5, 10, 20, 50),
-    #     'rf__max_depth': (50, 150, 250),
-    #     'rf__min_samples_split': [10, 2, 3],
-    #     'rf__min_samples_leaf': (1, 2, 3),
-        #xgb的参数
-        'xgb__max_depth':(5),
-        'xgb__learning_rate':(0.2)
 
-    }
-    pipe_lr=getPipe()
-    X_train,y_train=getTrainData()
-
-
-    #网格搜索
-    # grid_search = GridSearchCV(pipe_lr, parameters, n_jobs=-1, verbose=1, scoring=rocJdScore)
-    pipe_lr.fit(X_train, y_train)
-
-    #获取最优参数
-    # print('最佳效果：%0.3f' % grid_search.best_score_)
-    # print('最优参数：')
-    # best_parameters = grid_search.best_estimator_.get_params()
-    # for param_name in sorted(parameters.keys()):
-    #     print('\t%s= %r' % (param_name, best_parameters[param_name]))
-
-    # importance = pipe_lr.get_fscore()
-    # print(sorted(importance.items()))
-
-    # #预测以及分类器参数报告
-    # predictions = grid_search.predict(X_test)
-    # print(classification_report(y_test, predictions))
-
-    pipe=getPipe()
-    pipe=jdPipeFited(pipe)
+    pipe=jdPipeFited()
     preData=transferData(loginTestData,tradeTestData)
     x_pred=preData.iloc[:,2:].values
-    y_pred=pipe.predict(x_pred)
-    print np.sum(y_pred)
+    xgtest = xgb.DMatrix(x_pred)
+    y_pred=pipe.predict(xgtest)
 
     p=pd.DataFrame(y_pred)
+    p.columns=['is_risk']
+    p.loc[p['is_risk'] > 0.8, 'is_risk'] = 1
+    p.loc[p['is_risk'] <= 0.8, 'is_risk'] = 0
+    print p.is_risk.value_counts()
     subData=pd.DataFrame(preData['rowkey'])
     subData['is_risk']=p
     #之前用很多inner join，很多数据没有，都默认处理为没有风险
